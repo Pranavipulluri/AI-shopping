@@ -1,9 +1,13 @@
 // frontend/src/App.js
+
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { QueryClient, QueryClientProvider } from 'react-query';
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClient, QueryClientProvider } from 'react-query';
-
+import { GoogleOAuthProvider } from '@react-oauth/google';
 // Context Providers
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
@@ -38,16 +42,8 @@ import Sidebar from './components/common/Sidebar';
 import './App.css';
 
 // Create a client
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    },
-  },
-});
 
+/** 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -67,11 +63,10 @@ function App() {
                   }}
                 />
                 <Routes>
-                  {/* Auth Routes */}
+                  {/* Auth Routes }
                   <Route path="/login" element={<LoginForm />} />
                   <Route path="/register" element={<RegisterForm />} />
                   
-                  {/* Protected Customer Routes */}
                   <Route path="/customer" element={
                     <ProtectedRoute role="customer">
                       <CustomerLayout />
@@ -85,7 +80,6 @@ function App() {
                     <Route path="analytics" element={<SpendingAnalytics />} />
                   </Route>
                   
-                  {/* Protected Seller Routes */}
                   <Route path="/seller" element={
                     <ProtectedRoute role="seller">
                       <SellerLayout />
@@ -99,7 +93,6 @@ function App() {
                     <Route path="analytics" element={<SalesAnalytics />} />
                   </Route>
                   
-                  {/* Default Route */}
                   <Route path="/" element={<Navigate to="/login" replace />} />
                 </Routes>
               </div>
@@ -109,7 +102,7 @@ function App() {
       </AuthProvider>
     </QueryClientProvider>
   );
-}
+}*/
 
 // Layout Components
 function CustomerLayout() {
@@ -150,6 +143,120 @@ function SellerLayout() {
           </Routes>
         </main>
       </div>
+    </div>
+  );
+}
+
+
+
+// ... existing imports ...
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000,
+    },
+  },
+});
+
+function App() {
+  return (
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <CartProvider>
+            <NotificationProvider>
+              <Router>
+                <div className="App">
+                  <Toaster 
+                    position="top-right"
+                    toastOptions={{
+                      duration: 4000,
+                      style: {
+                        background: '#363636',
+                        color: '#fff',
+                      },
+                    }}
+                  />
+                  <Routes>
+                    {/* Auth Routes */}
+                  <Route path="/login" element={<LoginForm />} />
+                  <Route path="/register" element={<RegisterForm />} />
+                  
+                  {/* Protected Customer Routes */}
+                  <Route path="/customer" element={
+                    <ProtectedRoute role="customer">
+                      <CustomerLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<CustomerDashboard />} />
+                    <Route path="scan" element={<ProductScanner />} />
+                    <Route path="cart" element={<SmartCart />} />
+                    <Route path="chat" element={<ChatBot />} />
+                    <Route path="bill-upload" element={<BillUpload />} />
+                    <Route path="analytics" element={<SpendingAnalytics />} />
+                  </Route>
+                  
+                  {/* Protected Seller Routes */}
+                  <Route path="/seller" element={
+                    <ProtectedRoute role="seller">
+                      <SellerLayout />
+                    </ProtectedRoute>
+                  }>
+                    <Route index element={<SellerDashboard />} />
+                    <Route path="inventory" element={<InventoryManagement />} />
+                    <Route path="upload" element={<ProductUpload />} />
+                    <Route path="shelf-monitor" element={<ShelfMonitor />} />
+                    <Route path="alerts" element={<AlertsPanel />} />
+                    <Route path="analytics" element={<SalesAnalytics />} />
+                  </Route>
+                  
+                    <Route path="/auth/callback" element={<OAuthCallback />} />
+                  </Routes>
+                </div>
+              </Router>
+            </NotificationProvider>
+          </CartProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </GoogleOAuthProvider>
+  );
+}
+
+// OAuth Callback Component
+function OAuthCallback() {
+  const navigate = useNavigate();
+  const { setUser } = useAuth();
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    
+    if (token) {
+      localStorage.setItem('token', token);
+      
+      // Decode token to get user info
+      const decoded = jwt_decode(token);
+      
+      // Fetch user profile
+      api.get('/auth/profile', {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(response => {
+        setUser(response.data.user);
+        navigate(`/${response.data.user.role}`);
+      }).catch(() => {
+        navigate('/login');
+      });
+    } else {
+      navigate('/login');
+    }
+  }, [navigate, setUser]);
+  
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <LoadingSpinner fullScreen />
     </div>
   );
 }
