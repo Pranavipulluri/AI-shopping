@@ -4,7 +4,7 @@ import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Cart
 import { TrendingUp, Calendar, DollarSign, ShoppingBag, Heart, AlertTriangle, Download } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { useQuery } from 'react-query';
-
+import toast from 'react-hot-toast';
 // Services
 import { getSpendingAnalytics, getHealthInsights } from '../../services/api';
 

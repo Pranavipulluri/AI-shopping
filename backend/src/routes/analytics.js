@@ -26,6 +26,12 @@ router.get('/customer/savings',
   analyticsController.getSavingsReport
 );
 
+// ADD THIS NEW ROUTE HERE
+router.get('/customer/recent-orders',
+  authorize('customer'),
+  analyticsController.getRecentOrders
+);
+
 // Seller analytics routes
 router.get('/seller/sales',
   authorize('seller', 'admin'),
