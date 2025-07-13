@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const analyticsSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['sale', 'view', 'search', 'cart_add', 'cart_remove'],
+    enum: ['sale', 'view', 'search', 'cart_add', 'cart_remove', 'chat'], // Added 'chat' here
     required: true
   },
   user: {
@@ -35,6 +35,9 @@ const analyticsSchema = new mongoose.Schema({
   // Search specific fields
   searchQuery: String,
   searchResults: Number,
+  // Chat specific fields (new)
+  chatMessage: String,
+  chatResponseLength: Number,
   // User behavior
   sessionId: String,
   userAgent: String,

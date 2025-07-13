@@ -11,6 +11,8 @@ const api = axios.create({
   }
 });
 
+
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
@@ -158,6 +160,11 @@ export const analyticsAPI = {
     return response.data;
   },
   
+  getRecentOrders: async () => {
+    const response = await api.get('/analytics/customer/recent-orders');
+    return response.data;
+},
+
   getDemandPredictions: async () => {
     const response = await api.get('/analytics/seller/predictions');
     return response.data;

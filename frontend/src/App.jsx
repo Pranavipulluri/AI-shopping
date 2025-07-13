@@ -1,9 +1,7 @@
-// frontend/src/App.js
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClient, QueryClientProvider } from 'react-query';
-import { GoogleOAuthProvider } from '@react-oauth/google';
 
 // Context Providers
 import { AuthProvider } from './context/AuthContext';
@@ -34,21 +32,30 @@ import SalesAnalytics from './components/seller/SalesAnalytics';
 // Common Components
 import Header from './components/common/Header';
 import Sidebar from './components/common/Sidebar';
+import UserProfile from './components/common/UserProfile';
+import Settings from './components/common/Settings';
 
 // Styles
 import './App.css';
 
-
 // Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+    },
+  },
+});
 
-/** 
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <CartProvider>
-          <NotificationProvider>
-            <Router>
+      <Router>
+        <AuthProvider>
+          <CartProvider>
+            <NotificationProvider>
               <div className="App">
                 <Toaster 
                   position="top-right"
@@ -61,10 +68,11 @@ function App() {
                   }}
                 />
                 <Routes>
-                  {/* Auth Routes }
+                  {/* Auth Routes */}
                   <Route path="/login" element={<LoginForm />} />
                   <Route path="/register" element={<RegisterForm />} />
                   
+                  {/* Protected Customer Routes */}
                   <Route path="/customer" element={
                     <ProtectedRoute role="customer">
                       <CustomerLayout />
@@ -76,8 +84,11 @@ function App() {
                     <Route path="chat" element={<ChatBot />} />
                     <Route path="bill-upload" element={<BillUpload />} />
                     <Route path="analytics" element={<SpendingAnalytics />} />
+                    <Route path="profile" element={<UserProfile />} />
+                    <Route path="settings" element={<Settings />} />
                   </Route>
                   
+                  {/* Protected Seller Routes */}
                   <Route path="/seller" element={
                     <ProtectedRoute role="seller">
                       <SellerLayout />
@@ -89,35 +100,37 @@ function App() {
                     <Route path="shelf-monitor" element={<ShelfMonitor />} />
                     <Route path="alerts" element={<AlertsPanel />} />
                     <Route path="analytics" element={<SalesAnalytics />} />
+                    <Route path="profile" element={<UserProfile />} />
+                    <Route path="settings" element={<Settings />} />
                   </Route>
                   
+                  {/* Default Route */}
                   <Route path="/" element={<Navigate to="/login" replace />} />
                 </Routes>
               </div>
-            </Router>
-          </NotificationProvider>
-        </CartProvider>
-      </AuthProvider>
+            </NotificationProvider>
+          </CartProvider>
+        </AuthProvider>
+      </Router>
     </QueryClientProvider>
   );
-}*/
+}
 
-// Layout Components
+// Layout Components with useState for sidebar
 function CustomerLayout() {
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
+
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar userRole="customer" />
+      <Sidebar 
+        userRole="customer" 
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+        <Header setSidebarOpen={setSidebarOpen} />
         <main className="flex-1 overflow-y-auto">
-          <Routes>
-            <Route index element={<CustomerDashboard />} />
-            <Route path="scan" element={<ProductScanner />} />
-            <Route path="cart" element={<SmartCart />} />
-            <Route path="chat" element={<ChatBot />} />
-            <Route path="bill-upload" element={<BillUpload />} />
-            <Route path="analytics" element={<SpendingAnalytics />} />
-          </Routes>
+          <Outlet />
         </main>
       </div>
     </div>
@@ -125,140 +138,27 @@ function CustomerLayout() {
 }
 
 function SellerLayout() {
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
+
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar userRole="seller" />
+      <Sidebar 
+        userRole="seller" 
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Header />
+        <Header setSidebarOpen={setSidebarOpen} />
         <main className="flex-1 overflow-y-auto">
-          <Routes>
-            <Route index element={<SellerDashboard />} />
-            <Route path="inventory" element={<InventoryManagement />} />
-            <Route path="upload" element={<ProductUpload />} />
-            <Route path="shelf-monitor" element={<ShelfMonitor />} />
-            <Route path="alerts" element={<AlertsPanel />} />
-            <Route path="analytics" element={<SalesAnalytics />} />
-          </Routes>
+          <Outlet />
         </main>
       </div>
     </div>
   );
 }
 
-
-
-// ... existing imports ...
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 5 * 60 * 1000,
-    },
-  },
-});
-
-function App() {
-  return (
-    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
-  <QueryClientProvider client={queryClient}>
-    <Router>  {/* Router comes BEFORE AuthProvider */}
-      <AuthProvider>
-        <CartProvider>
-          <NotificationProvider>
-            <div className="App">
-              <Toaster 
-                position="top-right"
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                  },
-                }}
-              />
-              <Routes>
-                {/* Auth Routes */}
-                <Route path="/" element={<Navigate to="/login" replace />} />
-                <Route path="/login" element={<LoginForm />} />
-                <Route path="/register" element={<RegisterForm />} />
-                
-                {/* Protected Customer Routes */}
-                <Route path="/customer" element={
-                  <ProtectedRoute role="customer">
-                    <CustomerLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<CustomerDashboard />} />
-                  <Route path="scan" element={<ProductScanner />} />
-                  <Route path="cart" element={<SmartCart />} />
-                  <Route path="chat" element={<ChatBot />} />
-                  <Route path="bill-upload" element={<BillUpload />} />
-                  <Route path="analytics" element={<SpendingAnalytics />} />
-                </Route>
-                
-                {/* Protected Seller Routes */}
-                <Route path="/seller" element={
-                  <ProtectedRoute role="seller">
-                    <SellerLayout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<SellerDashboard />} />
-                  <Route path="inventory" element={<InventoryManagement />} />
-                  <Route path="upload" element={<ProductUpload />} />
-                  <Route path="shelf-monitor" element={<ShelfMonitor />} />
-                  <Route path="alerts" element={<AlertsPanel />} />
-                  <Route path="analytics" element={<SalesAnalytics />} />
-                </Route>
-                
-                <Route path="/auth/callback" element={<OAuthCallback />} />
-              </Routes>
-            </div>
-          </NotificationProvider>
-        </CartProvider>
-      </AuthProvider>
-    </Router>
-  </QueryClientProvider>
-</GoogleOAuthProvider>
-
-  );
-}
-
-// OAuth Callback Component
-function OAuthCallback() {
-  const navigate = useNavigate();
-  const { setUser } = useAuth();
-  
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    
-    if (token) {
-      localStorage.setItem('token', token);
-      
-      // Decode token to get user info
-      const decoded = jwt_decode(token);
-      
-      // Fetch user profile
-      api.get('/auth/profile', {
-        headers: { Authorization: `Bearer ${token}` }
-      }).then(response => {
-        setUser(response.data.user);
-        navigate(`/${response.data.user.role}`);
-      }).catch(() => {
-        navigate('/login');
-      });
-    } else {
-      navigate('/login');
-    }
-  }, [navigate, setUser]);
-  
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <LoadingSpinner fullScreen />
-    </div>
-  );
-}
-
 export default App;
+
+// ===================================
+// frontend/src/components/common/UserProfile.jsx
+// ===================================
