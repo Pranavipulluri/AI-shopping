@@ -20,9 +20,15 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Please provide a password'],
+    required: function() {
+      return !this.googleId; // Password not required for Google users
+    },
     minlength: [6, 'Password must be at least 6 characters'],
     select: false
+  },
+  googleId: {
+    type: String,
+    sparse: true
   },
   role: {
     type: String,
@@ -32,6 +38,14 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     match: [/^[0-9]{10}$/, 'Please provide a valid 10-digit phone number']
+  },
+  avatar: {
+    type: String,
+    default: null
+  },
+  isEmailVerified: {
+    type: Boolean,
+    default: false
   },
   address: {
     street: String,
@@ -43,14 +57,7 @@ const userSchema = new mongoose.Schema({
       default: 'India'
     }
   },
-  avatar: {
-    type: String,
-    default: null
-  },
-  isEmailVerified: {
-    type: Boolean,
-    default: false
-  },
+  
   emailVerificationToken: String,
   emailVerificationExpire: Date,
   passwordResetToken: String,
@@ -99,8 +106,8 @@ userSchema.index({ createdAt: -1 });
 
 // Encrypt password before saving
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) {
-    next();
+  if (!this.password || !this.isModified('password')) {
+    return next();
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -109,7 +116,11 @@ userSchema.pre('save', async function(next) {
 });
 
 // Compare password method
+
 userSchema.methods.comparePassword = async function(enteredPassword) {
+  if (!this.password) {
+    return false; // Google users don't have passwords
+  }
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
@@ -141,5 +152,6 @@ userSchema.virtual('fullAddress').get(function() {
   
   return parts.join(', ');
 });
+
 
 module.exports = mongoose.model('User', userSchema);

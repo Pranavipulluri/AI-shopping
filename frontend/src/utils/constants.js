@@ -85,3 +85,16 @@ export const API_ENDPOINTS = {
     BARCODE: '/ai/barcode'
   }
 };
+
+export const PRODUCT_UNITS = [
+  'kg',
+  'litre',
+  'piece',
+  'dozen',
+  'packet',
+  'grams',
+  'millilitres',
+  'bundle',
+  'set',
+  'box'
+];

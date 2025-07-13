@@ -1,7 +1,8 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Analytics = require('../models/Analytics');
-const { startOfWeek, startOfMonth, startOfYear, subDays } = require('date-fns');
+const User = require('../models/User');
+const { startOfWeek, startOfMonth, startOfYear, subDays, format } = require('date-fns');
 
 // @desc    Get customer spending analytics
 // @route   GET /api/analytics/customer/spending
@@ -99,7 +100,10 @@ exports.getHealthInsights = async (req, res) => {
       user: userId,
       status: 'completed',
       createdAt: { $gte: subDays(new Date(), 30) }
-    }).populate('items.product');
+    })
+    .populate('items.product')
+    .sort('-createdAt')
+    .limit(10);
 
     // Calculate health metrics
     const healthMetrics = calculateHealthMetrics(recentOrders);
@@ -129,6 +133,92 @@ exports.getHealthInsights = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch health insights'
+    });
+  }
+};
+
+// @desc    Get savings report
+// @route   GET /api/analytics/customer/savings
+// @access  Private (Customer)
+exports.getSavingsReport = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { timeRange = 'month' } = req.query;
+
+    // Determine date range
+    let startDate;
+    const endDate = new Date();
+
+    switch (timeRange) {
+      case 'week':
+        startDate = startOfWeek(endDate);
+        break;
+      case 'month':
+        startDate = startOfMonth(endDate);
+        break;
+      case 'year':
+        startDate = startOfYear(endDate);
+        break;
+      default:
+        startDate = startOfMonth(endDate);
+    }
+
+    // Get orders with savings
+    const orders = await Order.find({
+      user: userId,
+      status: 'completed',
+      createdAt: { $gte: startDate, $lte: endDate },
+      savings: { $gt: 0 }
+    })
+    .populate('items.product')
+    .sort('-createdAt');
+
+    // Calculate savings by category
+    const savingsByCategory = {};
+    let totalSavings = 0;
+    let totalSpent = 0;
+
+    orders.forEach(order => {
+      totalSavings += order.savings || 0;
+      totalSpent += order.totalAmount;
+
+      order.items.forEach(item => {
+        if (item.product) {
+          const category = item.product.category;
+          if (!savingsByCategory[category]) {
+            savingsByCategory[category] = {
+              category,
+              savings: 0,
+              count: 0
+            };
+          }
+          
+          if (item.discount) {
+            savingsByCategory[category].savings += item.discount * item.quantity;
+            savingsByCategory[category].count += 1;
+          }
+        }
+      });
+    });
+
+    // Top money-saving products
+    const topSavingProducts = await getTopSavingProducts(userId, startDate, endDate);
+
+    res.status(200).json({
+      success: true,
+      totalSavings,
+      totalSpent,
+      savingsPercentage: totalSpent > 0 ? ((totalSavings / (totalSpent + totalSavings)) * 100).toFixed(1) : 0,
+      savingsByCategory: Object.values(savingsByCategory),
+      topSavingProducts,
+      ordersWithSavings: orders.length,
+      averageSavingsPerOrder: orders.length > 0 ? (totalSavings / orders.length).toFixed(2) : 0
+    });
+  } catch (error) {
+    console.error('Get savings report error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch savings report'
     });
   }
 };
@@ -257,6 +347,104 @@ exports.getDemandPredictions = async (req, res) => {
   }
 };
 
+// @desc    Get performance metrics
+// @route   GET /api/analytics/seller/performance
+// @access  Private (Seller)
+exports.getPerformanceMetrics = async (req, res) => {
+  try {
+    const sellerId = req.user.id;
+    const { timeRange = 'month' } = req.query;
+
+    // Determine date range
+    let startDate;
+    const endDate = new Date();
+
+    switch (timeRange) {
+      case 'week':
+        startDate = startOfWeek(endDate);
+        break;
+      case 'month':
+        startDate = startOfMonth(endDate);
+        break;
+      case 'year':
+        startDate = startOfYear(endDate);
+        break;
+      default:
+        startDate = startOfMonth(endDate);
+    }
+
+    // Get various performance metrics
+    const [
+      salesMetrics,
+      inventoryMetrics,
+      customerMetrics,
+      productPerformance
+    ] = await Promise.all([
+      getSalesMetrics(sellerId, startDate, endDate),
+      getInventoryMetrics(sellerId),
+      getCustomerMetrics(sellerId, startDate, endDate),
+      getProductPerformance(sellerId, startDate, endDate)
+    ]);
+
+    // Calculate overall performance score
+    const performanceScore = calculatePerformanceScore({
+      salesMetrics,
+      inventoryMetrics,
+      customerMetrics
+    });
+
+    res.status(200).json({
+      success: true,
+      performanceScore,
+      salesMetrics,
+      inventoryMetrics,
+      customerMetrics,
+      productPerformance,
+      recommendations: generatePerformanceRecommendations({
+        salesMetrics,
+        inventoryMetrics,
+        customerMetrics,
+        productPerformance
+      })
+    });
+  } catch (error) {
+    console.error('Get performance metrics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch performance metrics'
+    });
+  }
+};
+
+// @desc    Get recent orders for customer
+// @route   GET /api/analytics/customer/recent-orders
+// @access  Private (Customer)
+exports.getRecentOrders = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { limit = 10 } = req.query;
+
+    const orders = await Order.find({
+      user: userId,
+      status: 'completed'
+    })
+    .populate('items.product', 'name category images')
+    .sort('-createdAt')
+    .limit(parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      orders
+    });
+  } catch (error) {
+    console.error('Get recent orders error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch recent orders'
+    });
+  }
+};
+
 // Helper functions
 function calculateSpendingAnalytics(orders) {
   let totalSpent = 0;
@@ -375,6 +563,49 @@ async function getTopProducts(userId, startDate, endDate) {
   }));
 }
 
+async function getTopSavingProducts(userId, startDate, endDate) {
+  const products = await Order.aggregate([
+    {
+      $match: {
+        user: userId,
+        createdAt: { $gte: startDate, $lte: endDate },
+        status: 'completed'
+      }
+    },
+    { $unwind: '$items' },
+    {
+      $match: {
+        'items.discount': { $gt: 0 }
+      }
+    },
+    {
+      $group: {
+        _id: '$items.product',
+        totalSaved: { $sum: { $multiply: ['$items.discount', '$items.quantity'] } },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { totalSaved: -1 } },
+    { $limit: 5 },
+    {
+      $lookup: {
+        from: 'products',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'product'
+      }
+    },
+    { $unwind: '$product' }
+  ]);
+
+  return products.map(p => ({
+    name: p.product.name,
+    category: p.product.category,
+    totalSaved: p.totalSaved,
+    count: p.count
+  }));
+}
+
 function calculateHealthMetrics(orders) {
   let totalHealthScore = 0;
   let productCount = 0;
@@ -473,6 +704,129 @@ function calculateDietaryGoalsProgress(orders, restrictions) {
   ];
 }
 
+async function getTopSellingProducts(sellerId, startDate, endDate) {
+  const products = await Analytics.aggregate([
+    {
+      $match: {
+        seller: sellerId,
+        type: 'sale',
+        createdAt: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: '$product',
+        revenue: { $sum: '$revenue' },
+        unitsSold: { $sum: '$unitsSold' }
+      }
+    },
+    { $sort: { revenue: -1 } },
+    { $limit: 10 },
+    {
+      $lookup: {
+        from: 'products',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'product'
+      }
+    },
+    { $unwind: '$product' }
+  ]);
+
+  return products.map(p => ({
+    name: p.product.name,
+    category: p.product.category,
+    revenue: p.revenue,
+    unitsSold: p.unitsSold
+  }));
+}
+
+async function getCategoryPerformance(sellerId, startDate, endDate) {
+  const performance = await Analytics.aggregate([
+    {
+      $match: {
+        seller: sellerId,
+        type: 'sale',
+        createdAt: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: '$category',
+        revenue: { $sum: '$revenue' },
+        unitsSold: { $sum: '$unitsSold' }
+      }
+    },
+    { $sort: { revenue: -1 } }
+  ]);
+
+  return performance.map(p => ({
+    name: p._id,
+    revenue: p.revenue,
+    unitsSold: p.unitsSold
+  }));
+}
+
+async function calculateGrowthMetrics(sellerId, startDate, endDate) {
+  // Calculate previous period
+  const periodLength = endDate - startDate;
+  const previousStart = new Date(startDate.getTime() - periodLength);
+  const previousEnd = new Date(startDate.getTime());
+
+  // Get current and previous period data
+  const [currentData, previousData] = await Promise.all([
+    Analytics.aggregate([
+      {
+        $match: {
+          seller: sellerId,
+          type: 'sale',
+          createdAt: { $gte: startDate, $lte: endDate }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          revenue: { $sum: '$revenue' },
+          orders: { $sum: 1 },
+          units: { $sum: '$unitsSold' }
+        }
+      }
+    ]),
+    Analytics.aggregate([
+      {
+        $match: {
+          seller: sellerId,
+          type: 'sale',
+          createdAt: { $gte: previousStart, $lte: previousEnd }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          revenue: { $sum: '$revenue' },
+          orders: { $sum: 1 },
+          units: { $sum: '$unitsSold' }
+        }
+      }
+    ])
+  ]);
+
+  const current = currentData[0] || { revenue: 0, orders: 0, units: 0 };
+  const previous = previousData[0] || { revenue: 0, orders: 0, units: 0 };
+
+  return {
+    revenueGrowth: previous.revenue > 0 
+      ? ((current.revenue - previous.revenue) / previous.revenue * 100).toFixed(1) 
+      : 0,
+    ordersGrowth: previous.orders > 0 
+      ? ((current.orders - previous.orders) / previous.orders * 100).toFixed(1) 
+      : 0,
+    unitsGrowth: previous.units > 0 
+      ? ((current.units - previous.units) / previous.units * 100).toFixed(1) 
+      : 0
+  };
+}
+
 async function generateDemandPredictions(historicalData) {
   // Group by product
   const productData = {};
@@ -546,6 +900,166 @@ function generateInventoryRecommendations(predictions, seasonalTrends) {
       });
     }
   });
+
+  return recommendations;
+}
+
+async function getSalesMetrics(sellerId, startDate, endDate) {
+  const metrics = await Analytics.aggregate([
+    {
+      $match: {
+        seller: sellerId,
+        type: 'sale',
+        createdAt: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: '$revenue' },
+        totalOrders: { $sum: 1 },
+        totalUnits: { $sum: '$unitsSold' },
+        avgOrderValue: { $avg: '$revenue' }
+      }
+    }
+  ]);
+
+  return metrics[0] || {
+    totalRevenue: 0,
+    totalOrders: 0,
+    totalUnits: 0,
+    avgOrderValue: 0
+  };
+}
+
+async function getInventoryMetrics(sellerId) {
+  const Inventory = require('../models/Inventory');
+  
+  const metrics = await Inventory.aggregate([
+    {
+      $match: {
+        seller: sellerId,
+        isActive: true
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalProducts: { $sum: 1 },
+        lowStockItems: {
+          $sum: {
+            $cond: [{ $lte: ['$stockLevel', '$minStockLevel'] }, 1, 0]
+          }
+        },
+        outOfStockItems: {
+          $sum: {
+            $cond: [{ $eq: ['$stockLevel', 0] }, 1, 0]
+          }
+        },
+        totalStockValue: {
+          $sum: { $multiply: ['$stockLevel', 1] } // Should multiply by product price
+        }
+      }
+    }
+  ]);
+
+  return metrics[0] || {
+    totalProducts: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0,
+    totalStockValue: 0
+  };
+}
+
+async function getCustomerMetrics(sellerId, startDate, endDate) {
+  // Simplified customer metrics
+  return {
+    uniqueCustomers: 0, // Would need order data with seller info
+    repeatCustomers: 0,
+    customerRetentionRate: 0,
+    averageCustomerValue: 0
+  };
+}
+
+async function getProductPerformance(sellerId, startDate, endDate) {
+  const performance = await Analytics.aggregate([
+    {
+      $match: {
+        seller: sellerId,
+        type: 'sale',
+        createdAt: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: '$product',
+        revenue: { $sum: '$revenue' },
+        unitsSold: { $sum: '$unitsSold' },
+        views: { $sum: 1 } // Simplified
+      }
+    },
+    {
+      $lookup: {
+        from: 'products',
+        localField: '_id',
+        foreignField: '_id',
+        as: 'product'
+      }
+    },
+    { $unwind: '$product' },
+    { $sort: { revenue: -1 } },
+    { $limit: 20 }
+  ]);
+
+  return performance.map(p => ({
+    productId: p._id,
+    name: p.product.name,
+    category: p.product.category,
+    revenue: p.revenue,
+    unitsSold: p.unitsSold,
+    views: p.views,
+    conversionRate: p.views > 0 ? (p.unitsSold / p.views * 100).toFixed(1) : 0
+  }));
+}
+
+function calculatePerformanceScore(metrics) {
+  // Simplified performance score calculation
+  let score = 50; // Base score
+
+  // Revenue impact
+  if (metrics.salesMetrics.totalRevenue > 100000) score += 20;
+  else if (metrics.salesMetrics.totalRevenue > 50000) score += 10;
+
+  // Inventory health
+  if (metrics.inventoryMetrics.lowStockItems === 0) score += 10;
+  if (metrics.inventoryMetrics.outOfStockItems === 0) score += 10;
+
+  // Customer metrics
+  if (metrics.customerMetrics.customerRetentionRate > 30) score += 10;
+
+  return Math.min(100, score);
+}
+
+function generatePerformanceRecommendations(metrics) {
+  const recommendations = [];
+
+  if (metrics.inventoryMetrics.lowStockItems > 5) {
+    recommendations.push({
+      type: 'inventory',
+      priority: 'high',
+      message: 'Multiple items are running low on stock. Consider restocking soon.',
+      action: 'View low stock items'
+    });
+  }
+
+  if (metrics.salesMetrics.avgOrderValue < 500) {
+    recommendations.push({
+      type: 'sales',
+      priority: 'medium',
+      message: 'Average order value is below target. Consider bundling products or promotions.',
+      action: 'Create promotion'
+    });
+  }
 
   return recommendations;
 }

@@ -22,7 +22,8 @@ export function NotificationProvider({ children }) {
   useEffect(() => {
     if (user) {
       // Connect to WebSocket
-      const socketUrl = process.env.REACT_APP_WEBSOCKET_URL || 'ws://localhost:5000';
+      const socketUrl = import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:5000';
+
       const newSocket = io(socketUrl, {
         auth: {
           token: localStorage.getItem('token')

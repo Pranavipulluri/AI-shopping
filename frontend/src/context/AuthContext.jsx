@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { auth } from '../services/api';
 import toast from 'react-hot-toast';
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
+
 
 export const useAuth = () => {
   const context = useContext(AuthContext);

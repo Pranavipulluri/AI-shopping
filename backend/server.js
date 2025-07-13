@@ -1,11 +1,13 @@
+// Load environment variables
+require('dotenv').config();
+
 // backend/server.js
 const http = require('http');
 const app = require('./src/app');
 const socketIO = require('socket.io');
 const { connectDB } = require('./src/config/database');
 
-// Load environment variables
-require('dotenv').config();
+
 
 const PORT = process.env.PORT || 5000;
 
@@ -15,10 +17,11 @@ const server = http.createServer(app);
 // Initialize Socket.IO
 const io = socketIO(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
     credentials: true
   }
 });
+
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
